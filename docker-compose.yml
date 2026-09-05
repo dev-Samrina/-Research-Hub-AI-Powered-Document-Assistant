@@ -1,0 +1,56 @@
+# docker-compose.yml
+services:
+  # 1. DATABASE
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: research_hub_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: researchhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d researchhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. BACKEND
+  backend:
+    build: ./backend
+    container_name: research_hub_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/researchhub
+    volumes:
+      # THIS IS THE MAGIC: Maps your local code to the container.
+      # No need to rebuild when you change Python code!
+      - ./backend/app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 3. FRONTEND
+  frontend:
+    build: ./frontend
+    container_name: research_hub_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Maps local React code to the container.
+      # No need to rebuild when you change React code!
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
